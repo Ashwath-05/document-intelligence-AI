@@ -1,111 +1,177 @@
 # AI Document Intelligence Platform
 
-Upload documents, generate AI summaries, and ask questions about their contents.
+Upload a PDF, then search it, chat with it across multiple turns, and revisit
+past conversations later — with every answer grounded in the actual document
+content and cited back to the source chunk.
 
-**Status: Phase 1 — backend skeleton.** No document logic, no database, no LLM
-calls yet. Those arrive in later phases, and the structure below is built so
-each addition is additive rather than a rewrite.
+**Live demo:** [documentintel.netlify.app](https://documentintel.netlify.app)
+**Backend API docs:** [documentintelligence-176651909902.europe-west1.run.app/docs](https://documentintelligence-176651909902.europe-west1.run.app/docs)
+
+> The free-tier backend spins down after inactivity — the first request after
+> a quiet period can take 30-60 seconds to wake up. After that it's instant.
 
 ---
 
-## Setup
+## What it does
+
+- **Upload** a PDF — text is extracted, split into overlapping chunks, and
+  embedded into a vector store.
+- **Search** raw chunks by semantic similarity, no generation involved.
+- **Chat** with a document (or across all of them) using retrieval-augmented
+  generation — answers are grounded in retrieved chunks and cite their
+  sources. Follow-up questions are reformulated against conversation history
+  before retrieval, so "what about X?" actually finds the right chunks
+  instead of searching for those three words literally.
+- **Browse history** — every conversation is saved; pick one up again where
+  you left off.
+
+## Architecture
+
+```
++--------------+        HTTPS         +--------------------+
+|   Frontend   | --------------------> |      Backend       |
+| React + Vite | <-------------------- |  FastAPI (Python)  |
+|   (Netlify)  |        JSON           |  (Google Cloud Run)|
++--------------+                       +----------+---------+
+                                                   |
+                          +------------------------+------------------------+
+                          v                         v                         v
+                +--------------------+   +------------------+   +---------------------+
+                | PostgreSQL +       |   | sentence-        |   |  Groq API            |
+                | pgvector           |   | transformers     |   | (openai/gpt-oss-120b,|
+                | (Supabase)         |   | (embeddings)     |   |  LLM)                 |
+                +--------------------+   +------------------+   +---------------------+
+```
+
+Frontend and backend are deployed completely independently — they only
+know about each other through a URL (the frontend's `VITE_API_BASE_URL`)
+and a CORS allowlist entry on the backend.
+
+## Tech stack
+
+**Backend**
+- FastAPI (Python 3.12), Uvicorn
+- PostgreSQL + `pgvector` (hosted on Supabase), SQLAlchemy, Alembic migrations
+- `sentence-transformers` (`multi-qa-MiniLM-L6-cos-v1`) for embeddings — a
+  retrieval-tuned model chosen after real testing showed it outperformed a
+  general-purpose one for question-to-passage search
+- Groq (`openai/gpt-oss-120b`) for generation
+- `pypdf` for text extraction, `tiktoken` for token-aware chunking
+- Docker (CPU-only PyTorch build — the default GPU build would otherwise
+  pull in several GB of unused CUDA libraries)
+- Deployed on Google Cloud Run
+
+**Frontend**
+- React + Vite, React Router
+- Hand-written CSS (no framework) — a deliberate cyberpunk theme, not a
+  default component-library look
+- Deployed on Netlify
+
+## API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/health` | Health check |
+| POST | `/api/v1/documents` | Upload a PDF (extract, chunk, embed) |
+| GET | `/api/v1/documents/{id}` | Get one document by id |
+| POST | `/api/v1/search` | Raw vector search over chunks |
+| POST | `/api/v1/generate` | One-shot RAG answer, no conversation state |
+| POST | `/api/v1/chat` | Multi-turn RAG chat with query reformulation |
+| GET | `/api/v1/conversations` | List past conversations |
+| GET | `/api/v1/conversations/{id}` | Full transcript of one conversation |
+
+Full interactive docs (request/response schemas, try-it-now) are auto-generated
+at `/docs` on the live backend URL above.
+
+## Project structure
+
+```
+document-intelligence-AI/
+├── app/                    # FastAPI backend
+│   ├── api/routes/          # HTTP endpoints
+│   ├── services/             # Business logic (extraction, chunking, RAG, chat)
+│   ├── repositories/         # Database access
+│   ├── providers/            # Swappable embedding/LLM providers
+│   ├── models/                # SQLAlchemy models
+│   ├── schemas/               # Pydantic request/response contracts
+│   └── core/                   # Config, DB connection
+├── alembic/                 # Database migrations
+├── frontend/                 # React + Vite frontend
+│   └── src/
+│       ├── pages/              # Upload, Search, Chat, History views
+│       ├── components/          # Sidebar, shared UI
+│       └── context/              # Client-side document tracking
+├── Dockerfile
+└── requirements.txt
+```
+
+## Running locally
+
+### Backend
 
 ```bash
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env              # .env is gitignored; edit as needed
+cp .env.example .env               # fill in DATABASE_URL and GROQ_API_KEY
+alembic upgrade head               # create the database tables
 
 uvicorn app.main:app --reload
 ```
 
-Then open:
+Runs on `http://localhost:8000` — interactive docs at `/docs`.
 
-- http://127.0.0.1:8000/docs — interactive Swagger UI
-- http://127.0.0.1:8000/api/v1/health — liveness check
+### Frontend
 
-Expected response:
-
-```json
-{
-  "status": "ok",
-  "app_name": "AI Document Intelligence Platform",
-  "version": "0.1.0"
-}
+```bash
+cd frontend
+npm install
+cp .env.example .env               # point VITE_API_BASE_URL at your backend
+npm run dev
 ```
 
----
+Runs on `http://localhost:5173` — already in the backend's CORS allowlist
+for local development.
 
-## Structure
+## Deployment
 
-```
-app/
-├── main.py              composition root — builds the app, wires routers
-├── core/config.py       env-driven settings (Pydantic Settings)
-├── api/routes/          HTTP layer: parse request, delegate, shape response
-├── schemas/             Pydantic request/response contracts
-├── services/            business logic (empty until Phase 3)
-├── repositories/        data access (empty until Phase 2)
-└── providers/llm/       external service adapters
-    └── base.py          LLMProvider interface — no implementation yet
-```
+**Backend** ships as a Docker container. The `Dockerfile` reads the `PORT`
+environment variable at runtime rather than a hardcoded port, so the same
+image works unmodified across platforms (currently Google Cloud Run;
+previously tested on Render). Required environment variables:
+`DATABASE_URL`, `GROQ_API_KEY`.
 
-**Dependencies point one direction only: inward.**
+**Frontend** builds to static files (`npm run build` -> `dist/`) and deploys
+to Netlify. Build settings: base directory `frontend`, build command
+`npm run build`, publish directory `frontend/dist`. Requires one environment
+variable: `VITE_API_BASE_URL`, pointing at wherever the backend is live —
+Vite bakes this in at build time, so changing it always requires a fresh
+build, not just a settings change.
 
-```
-routers → services → repository & provider interfaces
-```
+Whichever platform hosts the frontend, its domain needs to be added to the
+backend's CORS allowlist in `app/main.py`, or every request from it will be
+silently blocked by the browser.
 
-A router never contains business logic. A service never imports FastAPI, and
-never imports a concrete provider — only the `LLMProvider` interface. A
-repository never calls an LLM.
+## Notable engineering decisions
 
-That single rule is what makes the roadmap work: adding RAG in Phase 10 changes
-service internals but leaves routers untouched, and adding OpenAI in Phase 18
-is a new class in `providers/llm/` with nothing else edited.
+A few things worth knowing if you're reading the code, not just running it:
 
-The test for whether the layering is real, not just folders: **could you call a
-service from a plain CLI script with no web server running?** If not, logic has
-leaked upward into the router.
-
----
-
-## Design decisions
-
-**`async def` for `/health`** — the handler does no blocking work, so it runs
-directly on the event loop with no threadpool hop. General rule: `async def`
-when the function is non-blocking or awaits async I/O; plain `def` when it does
-blocking work (sync DB driver, sync SDK), because FastAPI then offloads it to a
-threadpool and keeps the loop free. An `async def` with a blocking call inside
-is the worst case — it stalls every other request.
-
-**`get_settings()` as a dependency, not a global** — injecting settings via
-`Depends` lets tests override them. Importing a module-level `settings` object
-into a service makes that service untestable.
-
-**`@lru_cache` on `get_settings`** — the `.env` file is read and parsed once per
-process; every caller gets the same object.
-
-**`groq_api_key` has no default** — required as of Phase 8, once
-GenerationService actually calls Groq. Before that it defaulted to `""` so
-the app could boot with no provider wired up; now a missing key fails fast
-at startup instead of surfacing as a confusing error on the first real
-`/generate` request.
-
-**`LLMProvider.generate` is async** — an async contract can wrap a sync SDK, but
-a sync contract can't become async later without touching every caller.
-
-**`create_app()` factory** — tests can build a fresh, independently-configured
-instance instead of importing whatever global initialised first.
-
-**CORS is development-only** — the allowlist must be narrowed to real origins
-before deployment.
-
----
-
-## Next: Phase 2
-
-PostgreSQL via Supabase — schema design for documents, SQLAlchemy models,
-Alembic migrations, and the repository layer that fills the currently-empty
-`repositories/` package.
+- **Cosine distance, not similarity.** pgvector reports `<=>` as a distance
+  (lower = more similar), the opposite of the intuitive "higher score is
+  better" — the RAG threshold (`0.75`) was tuned from real query testing, not
+  guessed.
+- **Query reformulation is a separate step from generation.** A follow-up
+  like "what about X?" gets rewritten into a standalone question *before*
+  retrieval — handing raw follow-ups to the vector search would return
+  irrelevant chunks even if the final LLM prompt has perfect conversation
+  history.
+- **The backend migrated from Render to Cloud Run mid-project** after
+  document uploads were reliably OOM-crashing on Render's free 512MB RAM
+  tier — `torch` plus the embedding model alone consume a large share of
+  that before a single request is even processed. Cloud Run's free tier
+  allows configuring real memory headroom (2GB here) while staying free at
+  low traffic.
+- **No OCR.** Scanned/image-only PDFs are explicitly rejected with a clear
+  error rather than silently returning nothing — text extraction only reads
+  a PDF's real text layer.
