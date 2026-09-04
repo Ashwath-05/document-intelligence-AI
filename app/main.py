@@ -35,14 +35,18 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # The React frontend runs on a different origin (port 5173/3000) than the
-    # API, so the browser blocks requests by default. This allowlist is
-    # development-only -- it must be narrowed to real origins before deploy.
+    # The React frontend runs on a different origin than the API, so the
+    # browser blocks requests by default without this. localhost entries
+    # cover local dev; the netlify.app entry is the real deployed frontend
+    # -- add any future frontend domain (a custom domain, a second Netlify
+    # preview URL, etc.) here too, or requests from it will be silently
+    # blocked with no server-side error to point at.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
             "http://localhost:3000",
             "http://localhost:5173",
+            "https://documentintel.netlify.app",
         ],
         allow_credentials=True,
         allow_methods=["*"],
