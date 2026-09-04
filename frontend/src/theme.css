@@ -1,0 +1,307 @@
+/* ============================================================
+   DESIGN TOKENS
+   Three-note neon system on a navy-black base, not a single flat
+   accent on pure black -- cyan (primary/active), magenta (user
+   input/emphasis), amber (status/warning). See design plan.
+   ============================================================ */
+:root {
+  --bg: #0a0e17;
+  --surface: #12182b;
+  --surface-raised: #1a2238;
+  --border: #2a3352;
+
+  --cyan: #00f0ff;
+  --cyan-dim: #00838c;
+  --magenta: #ff2e88;
+  --magenta-dim: #8c1850;
+  --amber: #ffb000;
+
+  --text: #e8ecf4;
+  --text-muted: #6b7394;
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --radius: 2px; /* sharp, not the rounded-card default */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle ambient scanline texture across the whole app -- the one
+   sustained atmospheric touch. Everything else stays still. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.015) 0px,
+    rgba(255, 255, 255, 0.015) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0;
+  color: var(--text);
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--font-mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan);
+}
+
+input[type='file'] {
+  padding: 8px;
+}
+
+input[type='file']::file-selector-button {
+  font-family: var(--font-mono);
+  background: transparent;
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  margin-right: 12px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+input[type='file']::file-selector-button:hover {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+/* Visible keyboard focus everywhere, not just form fields */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--magenta-dim);
+  color: var(--text);
+}
+
+/* ============================================================
+   CORNER-BRACKET FRAME
+   The container language used throughout instead of rounded
+   cards + drop shadow -- a HUD/reticle motif tied to the subject.
+   ============================================================ */
+.bracket-frame {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px;
+}
+
+.bracket-frame::before,
+.bracket-frame::after,
+.bracket-frame > .corner-tl,
+.bracket-frame > .corner-br {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.bracket-frame::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--cyan);
+  border-left: 2px solid var(--cyan);
+}
+
+.bracket-frame::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--cyan);
+  border-right: 2px solid var(--cyan);
+}
+
+.bracket-frame.accent-magenta::before,
+.bracket-frame.accent-magenta::after {
+  border-color: var(--magenta);
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--cyan);
+  background: transparent;
+  color: var(--cyan);
+  padding: 10px 18px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: transparent;
+  color: var(--cyan);
+}
+
+.btn.danger {
+  border-color: var(--magenta);
+  color: var(--magenta);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: var(--magenta);
+  color: var(--bg);
+}
+
+/* ============================================================
+   STATUS TEXT
+   Used sparingly, and only for genuine system status -- not
+   decorative eyebrow labels.
+   ============================================================ */
+.status-line {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+/* Reserved for genuine terminal/system status readouts (backend
+   online/offline) -- not a general "small muted text" utility. Using
+   all-caps everywhere it appeared (labels, errors, empty states) was
+   the generic tell; this scopes it to where it's actually earned. */
+.status-line.readout {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.status-line.online {
+  color: var(--cyan);
+}
+
+.status-line.error {
+  color: var(--magenta);
+}
+
+.status-line.warn {
+  color: var(--amber);
+}
+
+/* ============================================================
+   BOOT SEQUENCE
+   The one orchestrated moment on load -- see App.jsx.
+   ============================================================ */
+@keyframes boot-flicker {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  10% {
+    opacity: 0.2;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.boot-flicker {
+  animation: boot-flicker 700ms steps(1, end) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-flicker {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cyan-dim);
+}
