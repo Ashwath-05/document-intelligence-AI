@@ -5,6 +5,7 @@ past conversations later — with every answer grounded in the actual document
 content and cited back to the source chunk.
 
 **Live demo:** [documentintel.netlify.app](https://documentintel.netlify.app)
+
 **Backend API docs:** [documentintelligence-176651909902.europe-west1.run.app/docs](https://documentintelligence-176651909902.europe-west1.run.app/docs)
 
 > The free-tier backend spins down after inactivity — the first request after
